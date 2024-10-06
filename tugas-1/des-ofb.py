@@ -47,15 +47,6 @@ def block_encrypt(block, keys):
     combined = right + left
     return permute(combined, INV_IP)
 
-# Dekripsi level blok
-def block_decrypt(block, keys):
-    block = permute(block, IP)
-    left, right = block[:32], block[32:]
-    for key in reversed(keys):
-        left, right = des_rounds(left, right, key)
-    combined = right + left
-    return permute(combined, INV_IP)
-
 # Key generation
 def key_generator():
     main_key = format(random.getrandbits(64), '064b')
@@ -63,74 +54,70 @@ def key_generator():
     subkeys = [format(random.getrandbits(48), '048b') for _ in range(16)]
     return subkeys
 
-# Fungsi padding dan unpadding
-def pad(plaintext_bin):
-    while len(plaintext_bin) % 64 != 0:
-        plaintext_bin += '0'
-    return plaintext_bin
-
-def unpad(plaintext_bin):
-    return plaintext_bin.rstrip('0')
-
-# Enkripsi dan Dekripsi mode CBC
-def encrypt_cbc(plaintext, keys, iv):
-    plaintext_bin = pad(plaintext)
-    blocks = [plaintext_bin[i:i+64] for i in range(0, len(plaintext_bin), 64)]
-    prev_block = iv
-    ciphertext = ""
-
-    for block in blocks:
-        block = xor(block, prev_block)
-        encrypted_block = block_encrypt(block, keys)
-        prev_block = encrypted_block
-        ciphertext += encrypted_block
-
-    return ciphertext
-
-def decrypt_cbc(ciphertext, keys, iv):
-    blocks = [ciphertext[i:i+64] for i in range(0, len(ciphertext), 64)]
-    prev_block = iv
-    decrypted_text = ""
-
-    for block in blocks:
-        decrypted_block = block_decrypt(block, keys)
-        plaintext_block = xor(decrypted_block, prev_block)
-        prev_block = block
-        decrypted_text += plaintext_block
-
-    return unpad(decrypted_text)
-
-# Fungsi helper konversi biner
+# Fungsi konversi string ke biner
 def str_to_bin(text):
     return ''.join(format(ord(c), '08b') for c in text)
 
+# Fungsi konversi biner ke string
 def bin_to_str(binary_text):
     chars = [binary_text[i:i+8] for i in range(0, len(binary_text), 8)]
     return ''.join([chr(int(char, 2)) for char in chars])
 
-# Konversi biner ke byte
+# Fungsi helper konversi biner ke byte
 def bin_to_bytes(binary_text):
     return int(binary_text, 2).to_bytes(len(binary_text) // 8, byteorder='big')
 
-# Fungsi untuk encode Base64
+# Fungsi encode Base64
 def to_base64(binary_text):
     return base64.b64encode(bin_to_bytes(binary_text)).decode('utf-8')
 
+# Enkripsi dan Dekripsi mode OFB
+def encrypt_ofb(plaintext, keys, iv):
+    plaintext_bin = str_to_bin(plaintext)
+    blocks = [plaintext_bin[i:i+64] for i in range(0, len(plaintext_bin), 64)]
+    
+    ciphertext = ""
+    current_iv = iv
+    
+    for block in blocks:
+        keystream = block_encrypt(current_iv, keys)
+        
+        encrypted_block = xor(block, keystream[:len(block)]) # Hanya XOR sesuai panjang block
+        ciphertext += encrypted_block
+        
+        current_iv = keystream
+    
+    return ciphertext
+
+def decrypt_ofb(ciphertext, keys, iv):
+    blocks = [ciphertext[i:i+64] for i in range(0, len(ciphertext), 64)]
+    
+    decrypted_text = ""
+    current_iv = iv
+    
+    for block in blocks:
+        keystream = block_encrypt(current_iv, keys)
+        
+        decrypted_block = xor(block, keystream[:len(block)]) # Hanya XOR sesuai panjang block
+        decrypted_text += decrypted_block
+        
+        current_iv = keystream
+    
+    return decrypted_text
+
 if __name__ == "__main__":
     keys = key_generator()
-    iv = format(random.getrandbits(64), '064b')
+    iv = format(random.getrandbits(64), '064b')  # IV 64-bit
 
     plaintext = input("Enter plaintext: ")
-    plaintext_bin = str_to_bin(plaintext)
-    plaintext_bin = pad(plaintext_bin)
-
+    
     # Enkripsi
-    encrypted_bin = encrypt_cbc(plaintext_bin, keys, iv)
+    encrypted_bin = encrypt_ofb(plaintext, keys, iv)
     encrypted_base64 = to_base64(encrypted_bin)
     print(f"Ciphertext (Encrypted-Binary): {encrypted_bin}")
     print(f"Ciphertext (Encrypted-Base64): {encrypted_base64}")
 
     # Dekripsi
-    decrypted_bin = decrypt_cbc(encrypted_bin, keys, iv)
+    decrypted_bin = decrypt_ofb(encrypted_bin, keys, iv)
     decrypted_text = bin_to_str(decrypted_bin)
     print(f"Decrypted: {decrypted_text}")
