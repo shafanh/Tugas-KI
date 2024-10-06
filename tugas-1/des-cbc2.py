@@ -1,4 +1,5 @@
 import random
+import base64
 
 # Initial Permutation (IP)
 IP = [58, 50, 42, 34, 26, 18, 10, 2,
@@ -75,26 +76,26 @@ def unpad(plaintext_bin):
 def encrypt_cbc(plaintext, keys, iv):
     plaintext_bin = pad(plaintext)
     blocks = [plaintext_bin[i:i+64] for i in range(0, len(plaintext_bin), 64)]
-    previous_block = iv
+    prev_block = iv
     ciphertext = ""
 
     for block in blocks:
-        block = xor(block, previous_block)
+        block = xor(block, prev_block)
         encrypted_block = block_encrypt(block, keys)
-        previous_block = encrypted_block
+        prev_block = encrypted_block
         ciphertext += encrypted_block
 
     return ciphertext
 
 def decrypt_cbc(ciphertext, keys, iv):
     blocks = [ciphertext[i:i+64] for i in range(0, len(ciphertext), 64)]
-    previous_block = iv
+    prev_block = iv
     decrypted_text = ""
 
     for block in blocks:
         decrypted_block = block_decrypt(block, keys)
-        plaintext_block = xor(decrypted_block, previous_block)
-        previous_block = block
+        plaintext_block = xor(decrypted_block, prev_block)
+        prev_block = block
         decrypted_text += plaintext_block
 
     return unpad(decrypted_text)
@@ -107,6 +108,13 @@ def bin_to_str(binary_text):
     chars = [binary_text[i:i+8] for i in range(0, len(binary_text), 8)]
     return ''.join([chr(int(char, 2)) for char in chars])
 
+# Konversi biner ke byte
+def bin_to_bytes(binary_text):
+    return int(binary_text, 2).to_bytes(len(binary_text) // 8, byteorder='big')
+
+# Fungsi untuk encode Base64
+def to_base64(binary_text):
+    return base64.b64encode(bin_to_bytes(binary_text)).decode('utf-8')
 
 if __name__ == "__main__":
     keys = key_generator()
@@ -118,7 +126,9 @@ if __name__ == "__main__":
 
     # Enkripsi
     encrypted_bin = encrypt_cbc(plaintext_bin, keys, iv)
-    print(f"Encrypted: {encrypted_bin}")
+    encrypted_base64 = to_base64(encrypted_bin)
+    print(f"Ciphertext (Encrypted-Binary): {encrypted_bin}")
+    print(f"Ciphertext (Encrypted-Base64): {encrypted_base64}")
 
     # Dekripsi
     decrypted_bin = decrypt_cbc(encrypted_bin, keys, iv)
